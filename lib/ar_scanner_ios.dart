@@ -2,8 +2,11 @@ import 'package:arkit_plugin/arkit_plugin.dart';
 import 'package:flutter/material.dart';
 import 'package:vector_math/vector_math_64.dart' as vm;
 
+import 'models/catalog.dart';
+
 class ArScannerIos extends StatefulWidget {
-  const ArScannerIos({super.key});
+  final CollectionItem item;
+  const ArScannerIos({super.key, required this.item});
 
   @override
   State<ArScannerIos> createState() => _ArScannerIosState();
@@ -43,7 +46,7 @@ class _ArScannerIosState extends State<ArScannerIos> {
       ARKitNode(
         geometry: node,
         position: vm.Vector3(0, 0.05, 0),
-        name: 'book_sphere_${anchor.identifier}',
+        name: '${widget.item.id}_${anchor.identifier}',
       ),
       parentNodeName: anchor.nodeName,
     );

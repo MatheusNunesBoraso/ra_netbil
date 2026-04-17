@@ -37,6 +37,14 @@ android {
     }
 }
 
+configurations.all {
+    exclude(group = "com.android.support")
+    resolutionStrategy {
+        force("androidx.core:core:1.13.1")
+        force("androidx.appcompat:appcompat:1.6.1")
+    }
+}
+
 flutter {
     source = "../.."
 }

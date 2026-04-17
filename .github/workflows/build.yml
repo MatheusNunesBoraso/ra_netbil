@@ -144,19 +144,6 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish GitHub Release (direct IPA download)
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ env.APP_VERSION }}
-          name: Build v${{ env.APP_VERSION }}
-          body: |
-            IPA assinado (App Store) gerado automaticamente pelo CI.
-            Download direto abaixo.
-          files: build/ios/ipa/ra-netbil-v${{ env.APP_VERSION }}.ipa
-          draft: false
-          prerelease: true
-
       - name: Upload to App Store Connect (TestFlight)
         env:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
@@ -176,3 +163,16 @@ jobs:
             --file "build/ios/ipa/ra-netbil-v${{ env.APP_VERSION }}.ipa" \
             --apiKey "$APPSTORE_API_KEY_ID" \
             --apiIssuer "$APPSTORE_API_ISSUER_ID"
+
+      - name: Publish GitHub Release (direct IPA download)
+        if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && always() }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.APP_VERSION }}
+          name: Build v${{ env.APP_VERSION }}
+          body: |
+            IPA assinado (App Store) gerado automaticamente pelo CI.
+            Download direto abaixo.
+          files: build/ios/ipa/ra-netbil-v${{ env.APP_VERSION }}.ipa
+          draft: false
+          prerelease: true

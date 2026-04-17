@@ -14,6 +14,7 @@ env:
 jobs:
   build-android:
     name: Build Android APK
+    if: false  # Temporariamente desligado; foco no iOS. Trocar para 'true' quando quiser reativar.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

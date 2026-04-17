@@ -114,7 +114,10 @@ jobs:
 
       - name: Install CocoaPods
         working-directory: ios
-        run: pod install --repo-update
+        run: |
+          # Evita problema de clonar repo trunk (CocoaPods ja usa CDN por default)
+          pod repo remove trunk 2>/dev/null || true
+          pod install
 
       - name: Build signed IPA (App Store method)
         run: |

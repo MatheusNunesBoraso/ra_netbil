@@ -12,6 +12,6 @@
   "properties" : {
     "compression-type" : "basic",
     "preserves-vector-representation" : false,
-    "width" : 0.15
+    "width" : 0.21
   }
 }

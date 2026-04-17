@@ -37,6 +37,6 @@ class CollectionItem {
     required this.referenceImageAsset,
     required this.referenceImageName,
     required this.model3dUrl,
-    this.physicalWidthMeters = 0.15,
+    this.physicalWidthMeters = 0.21,
   });
 }

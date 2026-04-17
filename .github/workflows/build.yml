@@ -139,12 +139,16 @@ jobs:
           retention-days: 30
 
       - name: Upload to App Store Connect (TestFlight)
-        if: ${{ secrets.APPSTORE_API_KEY_ID != '' }}
         env:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
           APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
         run: |
+          if [ -z "$APPSTORE_API_KEY_ID" ]; then
+            echo "::notice::APPSTORE_API_* secrets nao configurados. IPA assinado ficou como artifact; adicione os 3 secrets para habilitar upload automatico no TestFlight."
+            exit 0
+          fi
+
           mkdir -p ~/.appstoreconnect/private_keys
           echo -n "$APPSTORE_API_PRIVATE_KEY" > "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8"
 

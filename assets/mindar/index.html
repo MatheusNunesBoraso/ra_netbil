@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
+  <title>MindAR</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    #status {
+      position: fixed; left: 16px; right: 16px; bottom: 24px; z-index: 10;
+      background: rgba(0,0,0,0.75); color: #fff;
+      padding: 10px 16px; border-radius: 16px; text-align: center; font-size: 14px;
+      pointer-events: none;
+    }
+    #status.error { background: rgba(120,0,0,0.85); }
+    .missing {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      padding: 24px; text-align: center; z-index: 20; background: #000;
+    }
+    .missing a { color: #6cf; }
+  </style>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+</head>
+<body>
+  <div id="status">Aponte para a capa do livro...</div>
+
+  <a-scene
+    id="scene"
+    mindar-image="imageTargetSrc: ./book_cover.mind; autoStart: true; uiLoading: no; uiError: no; uiScanning: no;"
+    color-space="sRGB"
+    renderer="colorManagement: true, physicallyCorrectLights"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+
+    <a-assets>
+      <a-asset-item id="bookModel" src="../models/book_scene.glb"></a-asset-item>
+    </a-assets>
+
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+    <a-entity mindar-image-target="targetIndex: 0">
+      <a-gltf-model
+        rotation="0 0 0"
+        position="0 0 0.05"
+        scale="0.5 0.5 0.5"
+        src="#bookModel">
+      </a-gltf-model>
+    </a-entity>
+  </a-scene>
+
+  <script>
+    const status = document.getElementById('status');
+    const scene = document.getElementById('scene');
+
+    function setStatus(text, isError) {
+      status.textContent = text;
+      status.classList.toggle('error', !!isError);
+    }
+
+    scene.addEventListener('loaded', () => {
+      setStatus('Aponte para a capa do livro...');
+    });
+
+    const target = document.querySelector('[mindar-image-target]');
+    if (target) {
+      target.addEventListener('targetFound', () => {
+        setStatus('Modelo ancorado na capa!');
+      });
+      target.addEventListener('targetLost', () => {
+        setStatus('Capa perdida. Aponte novamente.');
+      });
+    }
+
+    // Fallback: fetch the .mind file; if missing, show instructions.
+    fetch('./book_cover.mind', { method: 'HEAD' })
+      .then(r => {
+        if (!r.ok) showMissing();
+      })
+      .catch(() => showMissing());
+
+    function showMissing() {
+      const div = document.createElement('div');
+      div.className = 'missing';
+      div.innerHTML = `
+        <div>
+          <h2 style="margin-bottom:12px">Arquivo de tracking nao encontrado</h2>
+          <p style="line-height:1.5;max-width:420px">
+            Gere o arquivo <code>book_cover.mind</code> a partir da capa em<br>
+            <a href="https://hiukim.github.io/mind-ar-js-doc/tools/compile/" target="_blank">
+              MindAR Image Compiler
+            </a><br><br>
+            e salve em <code>assets/mindar/book_cover.mind</code>.
+          </p>
+        </div>
+      `;
+      document.body.appendChild(div);
+    }
+
+    // Timeout: if nothing detected in 15s, nudge.
+    setTimeout(() => {
+      const s = status.textContent;
+      if (s.startsWith('Aponte')) {
+        setStatus(
+          'Nao conseguimos detectar a capa. Aproxime, ilumine bem e centralize.',
+          true
+        );
+      }
+    }, 15000);
+  </script>
+</body>
+</html>

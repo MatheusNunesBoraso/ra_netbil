@@ -1,11 +1,64 @@
 import 'package:flutter/material.dart';
 
+import 'ar_method.dart';
+import 'ar_method_service.dart';
 import 'collection_page.dart';
 import 'data/collections.dart';
 import 'models/catalog.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  ArMethod _method = ArMethod.original;
+
+  @override
+  void initState() {
+    super.initState();
+    ArMethodService.get().then((m) {
+      if (mounted) setState(() => _method = m);
+    });
+  }
+
+  Future<void> _pickMethod() async {
+    final picked = await showModalBottomSheet<ArMethod>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Text(
+              'Metodo de AR',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+          ),
+          ...ArMethod.values.map(
+            (m) => RadioListTile<ArMethod>(
+              value: m,
+              groupValue: _method,
+              onChanged: (v) => Navigator.of(ctx).pop(v),
+              title: Text(m.label),
+              subtitle: Text(m.description),
+              isThreeLine: true,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (picked != null && picked != _method) {
+      await ArMethodService.set(picked);
+      if (!mounted) return;
+      setState(() => _method = picked);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,8 +71,9 @@ class HomePage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _MethodBar(method: _method, onTap: _pickMethod),
             const Padding(
-              padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 12),
               child: Text(
                 'Escolha uma cole\u00e7\u00e3o',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
@@ -39,6 +93,60 @@ class HomePage extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MethodBar extends StatelessWidget {
+  final ArMethod method;
+  final VoidCallback onTap;
+  const _MethodBar({required this.method, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Material(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Icon(Icons.settings_suggest, color: scheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Metodo de AR',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        method.label,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.unfold_more, size: 20),
+              ],
+            ),
+          ),
         ),
       ),
     );

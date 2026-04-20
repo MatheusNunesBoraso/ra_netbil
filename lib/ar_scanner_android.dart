@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:arcore_flutter_plugin/arcore_flutter_plugin.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -14,12 +16,17 @@ class ArScannerAndroid extends StatefulWidget {
 }
 
 class _ArScannerAndroidState extends State<ArScannerAndroid> {
+  static const Duration _detectionTimeout = Duration(seconds: 15);
+
   ArCoreController? _controller;
   final Set<int> _placed = <int>{};
   String _status = 'Aponte para a capa do livro...';
+  bool _hasError = false;
+  Timer? _detectionTimer;
 
   @override
   void dispose() {
+    _detectionTimer?.cancel();
     _controller?.dispose();
     super.dispose();
   }
@@ -28,27 +35,62 @@ class _ArScannerAndroidState extends State<ArScannerAndroid> {
     _controller = controller;
     controller.onTrackingImage = _onTrackingImage;
 
-    final bytes = await rootBundle.load(widget.item.referenceImageAsset);
-    await controller.loadSingleAugmentedImage(
-      bytes: bytes.buffer.asUint8List(),
-    );
+    try {
+      final bytes = await rootBundle.load(widget.item.referenceImageAsset);
+      await controller.loadSingleAugmentedImage(
+        bytes: bytes.buffer.asUint8List(),
+      );
+      _startDetectionTimer();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _hasError = true;
+        _status =
+            'Nao foi possivel iniciar a camera AR.\nVerifique se o aparelho suporta ARCore.';
+      });
+    }
+  }
+
+  void _startDetectionTimer() {
+    _detectionTimer?.cancel();
+    _detectionTimer = Timer(_detectionTimeout, () {
+      if (!mounted) return;
+      if (_placed.isNotEmpty) return;
+      setState(() {
+        _hasError = true;
+        _status =
+            'Nao conseguimos detectar a capa.\nAproxime a camera, melhore a iluminacao\ne mantenha o livro centralizado.';
+      });
+    });
   }
 
   void _onTrackingImage(ArCoreAugmentedImage image) {
     if (_placed.contains(image.index)) return;
     _placed.add(image.index);
+    _detectionTimer?.cancel();
 
     final scale = widget.item.physicalWidthMeters;
 
-    final node = ArCoreReferenceNode(
-      name: '${widget.item.id}_${image.index}',
-      objectUrl: widget.item.model3dUrl,
-      position: vm.Vector3(0, 0, 0),
-      scale: vm.Vector3(scale, scale, scale),
-    );
+    try {
+      final node = ArCoreReferenceNode(
+        name: '${widget.item.id}_${image.index}',
+        objectUrl: widget.item.model3dUrl,
+        position: vm.Vector3(0, 0, 0),
+        scale: vm.Vector3(scale, scale, scale),
+      );
 
-    _controller?.addArCoreNodeToAugmentedImage(node, image.index);
-    setState(() => _status = 'Modelo ancorado na capa!');
+      _controller?.addArCoreNodeToAugmentedImage(node, image.index);
+      setState(() {
+        _hasError = false;
+        _status = 'Modelo ancorado na capa!';
+      });
+    } catch (e) {
+      setState(() {
+        _hasError = true;
+        _status =
+            'Capa detectada, mas falhou ao carregar o modelo 3D.\nVerifique a conexao com a internet.';
+      });
+    }
   }
 
   @override
@@ -62,19 +104,23 @@ class _ArScannerAndroidState extends State<ArScannerAndroid> {
           type: ArCoreViewType.AUGMENTEDIMAGES,
         ),
         Positioned(
-          left: 0,
-          right: 0,
+          left: 16,
+          right: 16,
           bottom: 24,
           child: Center(
             child: Container(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(24),
+                color: (_hasError ? Colors.red.shade900 : Colors.black)
+                    .withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(16),
               ),
-              child:
-                  Text(_status, style: const TextStyle(color: Colors.white)),
+              child: Text(
+                _status,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
             ),
           ),
         ),

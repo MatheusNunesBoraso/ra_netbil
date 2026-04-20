@@ -16,7 +16,11 @@ Local Flutter plugin wrapping EasyAR Sense 4.8 for the RA Netbil app.
   s.vendored_frameworks = 'easyar.xcframework'
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
-    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386'
+    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386',
+    'OTHER_LDFLAGS' => '$(inherited) -framework easyar'
+  }
+  s.user_target_xcconfig = {
+    'OTHER_LDFLAGS' => '$(inherited) -framework easyar'
   }
   s.swift_version = '5.0'
 end

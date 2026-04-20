@@ -4,24 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## O que é este repo
 
-App Flutter de Realidade Aumentada: escaneia a capa de um livro e ancora um modelo 3D sobre ela. Suporta Android (ARCore via `arcore_flutter_plugin`) e iOS (ARKit via `arkit_plugin`). Os binários são produzidos **pelo CI do GitHub Actions**, não localmente — a máquina de desenvolvimento é Windows e não tem toolchain iOS.
+App Flutter de Realidade Aumentada: escaneia a capa de um livro e ancora um modelo 3D sobre ela. Usa **EasyAR Sense 4.8** como motor de image tracking (escolhido depois que ARCore/ARKit/MindAR falharam em detectar a capa). Os binários são produzidos **pelo CI do GitHub Actions**, não localmente — a máquina de desenvolvimento é Windows e não tem toolchain iOS.
 
 ## Comandos úteis
 
 ```bash
-flutter pub get                          # instala dependências
+flutter pub get                          # instala dependências (inclui plugin local)
 flutter analyze                          # único check estático que roda local
-flutter test                             # testes Flutter (usar antes de push)
-flutter test test/widget_test.dart       # um arquivo específico
+flutter test                             # testes Flutter
 
-# Build local quase nunca é usado:
-# - Android local exige JDK 17+ (o sistema aqui tem 8, então falha).
-# - iOS local não roda em Windows.
-# Para gerar .apk e .ipa, use o workflow .github/workflows/build.yml
-# (push para main ou "Run workflow" manual).
+# Build local quase nunca é usado — iOS não roda em Windows,
+# Android exige JDK 17+. Use o workflow .github/workflows/build.yml.
 ```
 
-Cada run do workflow incrementa a versão: `run #N` → `v1.0.N` no `--build-name`/`--build-number` e no nome do artifact (`ra-netbil-v1.0.N.apk` / `ra-netbil-v1.0.N.ipa`).
+Cada run do workflow incrementa a versão: `run #N` → `v1.0.N` no `--build-name`/`--build-number` e no nome do artifact (`ra-netbil-v1.0.N.ipa`).
 
 ## Arquitetura em alto nível
 
@@ -30,38 +26,62 @@ Cada run do workflow incrementa a versão: `run #N` → `v1.0.N` no `--build-nam
 ```
 lib/main.dart (RaNetbilApp)
   └─ home_page.dart (grid das 5 coleções)
-       └─ collection_page.dart (lista de itens da coleção + pede Permission.camera)
-            └─ ar_scanner_page.dart (switch Platform.isIOS)
-                 ├─ ar_scanner_android.dart (ARCore AugmentedImages)
-                 └─ ar_scanner_ios.dart    (ARKit imageTracking)
+       └─ collection_page.dart (lista de itens + pede Permission.camera)
+            └─ ar_scanner_page.dart
+                 └─ EasyArView (do plugin local easyar_flutter)
+                      ├─ Android: PlatformView Kotlin → EasyAR.aar
+                      └─ iOS: FlutterPlatformView Swift → easyar.xcframework
 ```
 
-- `lib/models/catalog.dart` define `Collection` e `CollectionItem`. Cada item carrega `referenceImageAsset` (path Android/Flutter), `referenceImageName` (nome no AR Resource Group iOS), `model3dUrl` e `physicalWidthMeters`.
-- `lib/data/collections.dart` é o catálogo hardcoded das 5 coleções (Prisma, Ativamente, Frisbee, Alcance, Calesita). Enquanto os assets reais de cada livro não chegam, todos os itens apontam para um único placeholder (`book_cover.jpg` + Duck.glb remoto). Trocar por assets reais é só alterar os campos desse arquivo — nenhuma mudança de navegação.
-- `CollectionItem.physicalWidthMeters` é usado tanto para a escala do modelo 3D (Vector3 no Android) quanto para o escalonamento conceitual no iOS. Hoje default = 0.21 (livro 21 cm de largura).
+- `lib/models/catalog.dart` define `Collection` e `CollectionItem`. Cada item carrega `referenceImageAsset` (asset Flutter da capa), `model3dUrl` (URL ou asset do GLB) e `physicalWidthMeters`.
+- `lib/data/collections.dart` é o catálogo hardcoded das 5 coleções (Prisma, Ativamente, Frisbee, Alcance, Calesita). Enquanto os assets reais não chegam, todos os itens apontam pra um placeholder único.
+- `CollectionItem.physicalWidthMeters` define a escala do modelo 3D na ancoragem. Default = 0.21 (livro 21 cm de largura).
 
-### Imagem de referência — DUAS cópias sincronizadas
+### Plugin local `plugins/easyar_flutter/`
 
-A mesma capa precisa existir em dois lugares; o CI não copia entre eles:
+Plugin Flutter empacotado **dentro** do repo (não publicado em pub.dev). Referenciado em `pubspec.yaml` via `path: plugins/easyar_flutter`.
 
-1. `assets/images/book_cover.jpg` — usado pelo Android (`rootBundle.load` em runtime).
-2. `ios/Runner/Assets.xcassets/AR Resources.arresourcegroup/book_cover.arreferenceimage/book_cover.jpg` — empacotado pelo Xcode asset catalog; o nome da imageset (`book_cover`) é o que o Dart referencia via `detectionImagesGroupName: 'AR Resources'`.
+```
+plugins/easyar_flutter/
+├── pubspec.yaml                    # declara plataformas android+ios
+├── lib/easyar_flutter.dart         # EasyArView (AndroidView/UiKitView) + kEasyArSenseKey
+├── android/
+│   ├── build.gradle                # implementation files('libs/EasyAR.aar')
+│   ├── libs/EasyAR.aar             # 24 MB, binário EasyAR Sense 4.8
+│   └── src/main/kotlin/com/netbil/easyar_flutter/
+│       ├── EasyArFlutterPlugin.kt  # registra PlatformView factory
+│       ├── EasyArViewFactory.kt
+│       └── EasyArView.kt           # PlatformView nativo
+└── ios/
+    ├── easyar_flutter.podspec      # vendored_frameworks: easyar.xcframework
+    ├── easyar.xcframework/         # 15 MB, slices ios-arm64 + simulator
+    └── Classes/
+        ├── EasyArFlutterPlugin.swift
+        ├── EasyArViewFactory.swift
+        └── EasyArPlatformView.swift
+```
 
-Ao trocar a capa, **sempre atualizar ambas** + o campo `"width"` em `Contents.json` (em metros) para a largura física real.
+**Estado atual (Fase 1):** PlatformView nos dois lados mostra placeholder "EasyAR — Fase 1". Nenhuma chamada à engine EasyAR acontece ainda. Objetivo = validar ponte + linkagem de binários.
+
+**Próximo (Fase 2):** inicializar `cn.easyar.Engine.initialize(context, kEasyArSenseKey)` no Android e equivalente iOS, abrir câmera via `CameraDeviceSelector` e renderizar preview. Ver sample de referência em `/tmp/easyar_ref/samples/Community/Android/HelloARKotlin/` (extraído do 7z, fora do repo).
+
+**Fase 3:** carregar `referenceImageAsset` como `ImageTarget`, ativar `ImageTracker`, emitir eventos de detecção via MethodChannel.
+
+### Chave Sense
+
+Embedada em `plugins/easyar_flutter/lib/easyar_flutter.dart` como `kEasyArSenseKey`. Travada por bundle ID `com.netbil.realidadeaumentada` — o SDK valida em runtime. **Não é segredo** (é chave cliente, tipo chave pública); safe pra commitar. Se trocar de bundle ID, precisa regenerar em easyar.com e substituir a constante.
 
 ## Pontos sensíveis do CI (`.github/workflows/build.yml`)
 
-Plugins AR usados são antigos (2019-2022) e precisam de patches em runtime:
+- **Job Android está desligado** (`if: false`) — só iOS roda. Pra reativar: trocar pra `true`. EasyAR.aar está dentro do plugin, então `flutter pub get` resolve naturalmente.
 
-- **`arcore_flutter_plugin` 0.1.0** não declara `namespace` nem suporta AGP 8+, e usa `compileSdkVersion 29` (sem `android:attr/lStar`). O step **"Patch arcore_flutter_plugin"** edita o `build.gradle` do plugin em `~/.pub-cache` via `sed` antes do build. Se o build Android quebrar com "Namespace not specified", "resource lStar not found", ou "Duplicate class android.support.*", o patch é o primeiro lugar para mexer (`android/app/build.gradle.kts` também exclui `com.android.support` transitivo e desabilita minify/R8 no release — Sceneform tem classes referenciadas via reflection que R8 removeria).
+- **Pipeline iOS**: `pod install` consome o `easyar_flutter.podspec` que declara `vendored_frameworks = 'easyar.xcframework'`. Isso copia o framework pra dentro do build. Se o build quebrar com "framework not found" ou "Undefined symbols for arch arm64: \_easyar_*", checar se o xcframework foi commitado corretamente em `plugins/easyar_flutter/ios/easyar.xcframework/`.
 
-- **Job Android está desligado** (`if: false`) — só iOS roda. Reativar removendo a linha quando precisar.
+- **Signing iOS é manual** (configurado no pbxproj em Release e Profile). CODE_SIGN_IDENTITY="Apple Distribution", PROVISIONING_PROFILE_SPECIFIER="RA Netbil App Store", DEVELOPMENT_TEAM=CDW5CS3MHV.
 
-- **Signing iOS é manual** (não automatic), configurado **no pbxproj** em Release e Profile (CODE_SIGN_IDENTITY="Apple Distribution", PROVISIONING_PROFILE_SPECIFIER="RA Netbil App Store", DEVELOPMENT_TEAM=CDW5CS3MHV). Sem isso, `flutter build ipa` faz preflight procurando cert de Development e falha mesmo quando exportando em `app-store`. Alterar `ios/ExportOptions.plist` e o pbxproj juntos se mudar team/profile.
+- **3 saídas**: artifact IPA, upload TestFlight (via `xcrun altool`, se os `APPSTORE_API_*` secrets existirem), e GitHub Release pública.
 
-- **Pipeline iOS faz 3 saídas**: artifact (`.ipa` dentro de zip), upload para App Store Connect via `xcrun altool` (TestFlight), e GitHub Release pública com `.ipa` direto. O upload TestFlight só roda se os 3 secrets `APPSTORE_API_*` estiverem presentes — caso contrário skipa com notice.
-
-- **Podfile** tem `post_install` que adiciona `PERMISSION_CAMERA=1` ao preprocessador. Sem isso, `permission_handler` no iOS retorna `denied` sem mostrar o prompt do sistema. Se adicionar nova permissão (microfone, fotos, etc.) precisa acrescentar a flag correspondente aqui.
+- **Podfile** tem `post_install` que adiciona `PERMISSION_CAMERA=1` ao preprocessador — sem isso, `permission_handler` no iOS retorna `denied` sem mostrar prompt. Pra adicionar outra permissão (microfone, fotos), acrescentar a flag correspondente lá.
 
 ## Secrets do GitHub Actions
 
@@ -77,7 +97,7 @@ Plugins AR usados são antigos (2019-2022) e precisam de patches em runtime:
 | `APPSTORE_API_ISSUER_ID` | UUID do issuer |
 | `APPSTORE_API_PRIVATE_KEY` | conteúdo do `.p8` |
 
-Arquivos de origem estão fora do repo em `C:\Users\Mathe\ios-signing\` — estrutura separada em `_team/` (reusável para qualquer app da Netbil) e `apps/com.netbil.realidadeaumentada/` (específico deste app, inclui `secrets/*.txt` prontos para colar).
+Arquivos de origem estão fora do repo em `C:\Users\Mathe\ios-signing\`.
 
 ## Identidade do app
 

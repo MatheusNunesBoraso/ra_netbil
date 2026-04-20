@@ -4,11 +4,6 @@
 <dict>
 	<key>NSCameraUsageDescription</key>
 	<string>O app usa a camera para escanear a capa do livro e exibir o conteudo em realidade aumentada.</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UIRequiredDeviceCapabilities</key>

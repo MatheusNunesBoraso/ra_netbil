@@ -36,20 +36,6 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Patch arcore_flutter_plugin (namespace + compileSdk bump)
-        run: |
-          PLUGIN="$HOME/.pub-cache/hosted/pub.dev/arcore_flutter_plugin-0.1.0/android"
-          if [ ! -f "$PLUGIN/build.gradle" ]; then
-            echo "Plugin not found at $PLUGIN"; exit 1
-          fi
-          if ! grep -q "namespace" "$PLUGIN/build.gradle"; then
-            sed -i '/^android {/a\    namespace "com.difrancescogianmarco.arcore_flutter_plugin"' "$PLUGIN/build.gradle"
-          fi
-          sed -i 's/compileSdkVersion 29/compileSdkVersion 34/' "$PLUGIN/build.gradle"
-          sed -i 's/ package="com.difrancescogianmarco.arcore_flutter_plugin"//' "$PLUGIN/src/main/AndroidManifest.xml" || true
-          echo "--- Patched plugin build.gradle ---"
-          grep -E "namespace|compileSdk" "$PLUGIN/build.gradle" || true
-
       - name: Build APK (release, debug-signed)
         run: |
           flutter build apk --release \
